@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Kloopsweeper</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #f0f0f0;
+    }
+    #game-container {
+      display: inline-block;
+      background-color: #ccc;
+      padding: 10px;
+      border: 2px solid #999;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(10, 40px);
+      grid-gap: 1px;
+      background-color: #999;
+    }
+    .cell {
+      width: 40px;
+      height: 40px;
+      background-color: #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .cell.revealed {
+      background-color: #eee;
+      cursor: default;
+    }
+    .cell.mine {
+      background-color: #ff5555;
+    }
+    #status {
+      font-size: 1.2em;
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Kloopsweeper</h1>
+  <p>Tap to reveal, long-press to flag. Avoid the 10 kloops!</p>
+  <div id="game-container">
+    <div id="grid"></div>
+  </div>
+  <p id="status">Kloops remaining: 10</p>
+  <button onclick="resetGame()">Reset Game</button>
+
+  <script>
+    const GRID_SIZE = 10;
+    const KLOOP_COUNT = 10;
+    let grid = [];
+    let gameOver = false;
+    let cellsRevealed = 0;
+    let flagsPlaced = 0;
+
+    function initializeGrid() {
+      grid = [];
+      cellsRevealed = 0;
+      flagsPlaced = 0;
+      gameOver = false;
+      document.getElementById('status').innerText = `Kloops remaining: ${KLOOP_COUNT - flagsPlaced}`;
+      
+      // Create empty grid
+      for (let i = 0; i < GRID_SIZE; i++) {
+        grid[i] = [];
+        for (let j = 0; j < GRID_SIZE; j++) {
+          grid[i][j] = { mine: false, revealed: false, flagged: false, adjacentMines: 0 };
+        }
+      }
+
+      // Place kloops
+      let kloopsPlaced = 0;
+      while (kloopsPlaced < KLOOP_COUNT) {
+        const row = Math.floor(Math.random() * GRID_SIZE);
+        const col = Math.floor(Math.random() * GRID_SIZE);
+        if (!grid[row][col].mine) {
+          grid[row][col].mine = true;
+          kloopsPlaced++;
+        }
+      }
+
+      // Calculate adjacent kloops
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          if (!grid[i][j].mine) {
+            grid[i][j].adjacentMines = countAdjacentKloops(i, j);
+          }
+        }
+      }
+    }
+
+    function countAdjacentKloops(row, col) {
+      let count = 0;
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          const ni = row + di;
+          const nj = col + dj;
+          if (ni >= 0 && ni < GRID_SIZE && nj >= 0 && nj < GRID_SIZE && grid[ni][nj].mine) {
+            count++;
+          }
+        }
+      }
+      return count;
+    }
+
+    function renderGrid() {
+      const gridElement = document.getElementById('grid');
+      gridElement.innerHTML = '';
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = i;
+          cell.dataset.col = j;
+
+          if (grid[i][j].revealed) {
+            cell.classList.add('revealed');
+            if (grid[i][j].mine) {
+              cell.classList.add('mine');
+              cell.innerText = '🐒';
+            } else if (grid[i][j].adjacentMines > 0) {
+              cell.innerText = grid[i][j].adjacentMines;
+            }
+          } else if (grid[i][j].flagged) {
+            cell.innerText = '🦐';
+          }
+
+          let touchStartTime;
+          let touchTimeout;
+          cell.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchStartTime = Date.now();
+            touchTimeout = setTimeout(() => flagCell(i, j), 500);
+          });
+          cell.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            clearTimeout(touchTimeout);
+            if (Date.now() - touchStartTime < 500) {
+              revealCell(i, j);
+            }
+          });
+          cell.addEventListener('click', () => revealCell(i, j));
+          cell.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            flagCell(i, j);
+          });
+
+          gridElement.appendChild(cell);
+        }
+      }
+    }
+
+    function revealCell(row, col) {
+      if (gameOver || grid[row][col].revealed || grid[row][col].flagged) return;
+
+      grid[row][col].revealed = true;
+      cellsRevealed++;
+
+      if (grid[row][col].mine) {
+        gameOver = true;
+        revealAllKloops();
+        document.getElementById('status').innerText = 'You got Klooped!';
+        renderGrid();
+        return;
+      }
+
+      if (grid[i][j].adjacentMines === 0) {
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            const ni = row + di;
+            const nj = col + dj;
+            if (ni >= 0 && ni < GRID_SIZE && nj >= 0 && nj < GRID_SIZE) {
+              revealCell(ni, nj);
+            }
+          }
+        }
+      }
+
+      const totalNonKloopCells = GRID_SIZE * GRID_SIZE - KLOOP_COUNT;
+      if (cellsRevealed === totalNonKloopCells) {
+        gameOver = true;
+        document.getElementById('status').innerText = 'You Win! All non-kloop cells revealed!';
+      }
+
+      renderGrid();
+    }
+
+    function flagCell(row, col) {
+      if (gameOver || grid[row][col].revealed) return;
+
+      if (!grid[row][col].flagged) {
+        grid[row][col].flagged = true;
+        flagsPlaced++;
+      } else {
+        grid[row][col].flagged = false;
+        flagsPlaced--;
+      }
+
+      document.getElementById('status').innerText = `Kloops remaining: ${KLOOP_COUNT - flagsPlaced}`;
+      renderGrid();
+    }
+
+    function revealAllKloops() {
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          if (grid[i][j].mine) {
+            grid[i][j].revealed = true;
+          }
+        }
+      }
+    }
+
+    function resetGame() {
+      initializeGrid();
+      renderGrid();
+      document.getElementById('status').innerText = `Kloops remaining: ${KLOOP_COUNT}`;
+    }
+
+    initializeGrid();
+    renderGrid();
+  </script>
+</body>
+</html>
